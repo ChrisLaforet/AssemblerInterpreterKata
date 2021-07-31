@@ -41,11 +41,11 @@ namespace AssemblerInterpreter
 		}
 
 		[Test]
-		public void givenCodeWithOnlyRtn_whenParsed_thenReturnsImmediateInstructionForRtn()
+		public void givenCodeWithOnlyRet_whenParsed_thenReturnsImmediateInstructionForRet()
 		{
-			Executable executable = CodeParser.ParseCode("RTN");
+			Executable executable = CodeParser.ParseCode("RET");
 			Assert.IsTrue(executable.Instructions.Count == 1);
-			Assert.AreEqual("rtn", executable.Instructions[0].Opcode);
+			Assert.AreEqual("ret", executable.Instructions[0].Opcode);
 		}
 
 		[Test]
@@ -94,6 +94,62 @@ namespace AssemblerInterpreter
 			Assert.IsTrue(executable.Instructions.Count == 1);
 			Assert.AreEqual("add", executable.Instructions[0].Opcode);
 			Assert.AreEqual(1, executable.Registers.Count);
+		}
+
+		[Test]
+		public void givenCodeWithOnlyMsgWithNonStringParameters_whenParsed_thenReturnsMsgInstruction()
+		{
+			Executable executable = CodeParser.ParseCode("msg AX, BX, CX");
+			Assert.IsTrue(executable.Instructions.Count == 1);
+			Assert.AreEqual("msg", executable.Instructions[0].Opcode);
+			MsgInstruction msgInstruction = executable.Instructions[0] as MsgInstruction;
+			Assert.AreEqual(3, msgInstruction.Parameters.Length);
+		}
+
+		[Test]
+		public void givenCodeWithOnlyMsgContainingStrings_whenParsed_thenReturnsMsgInstruction()
+		{
+			Executable executable = CodeParser.ParseCode("msg 'Notice ', AX, ' is not equal to value of ', CX");
+			Assert.IsTrue(executable.Instructions.Count == 1);
+			Assert.AreEqual("msg", executable.Instructions[0].Opcode);
+			MsgInstruction msgInstruction = executable.Instructions[0] as MsgInstruction;
+			Assert.AreEqual(4, msgInstruction.Parameters.Length);
+		}
+
+		[Test]
+		public void givenCodeWithOnlyMsgContainingConstants_whenParsed_thenThrowsException()
+		{
+			Assert.Throws<Exception>(() => CodeParser.ParseCode("msg AX, 'text', 123, BX"));
+		}
+
+		[Test]
+		public void givenEmptyCode_whenInterpreted_thenReturnsNull()
+		{
+			Assert.IsNull(AssemblerInterpreter.Interpret(""));
+		}
+
+		[Test]
+		public void givenCodeWithCommentOnly_whenInterpreted_thenReturnsNull()
+		{
+			Assert.IsNull(AssemblerInterpreter.Interpret("; ignore this"));
+		}
+
+		[Test]
+		public void givenCodeWithEnd_whenInterpreted_thenReturnsEmptyStringOnCleanExit()
+		{
+			Assert.AreEqual("", AssemblerInterpreter.Interpret("\nend\n"));
+		}
+
+		[Test]
+		public void givenCodeWithMsgAndEnd_whenInterpreted_thenReturnsMsgContent()
+		{
+			Assert.AreEqual("Hello World", AssemblerInterpreter.Interpret("msg 'Hello World'\nend\n"));
+		}
+
+		[Test]
+		public void givenCodeWithIncOnRegisterMsgAndEnd_whenInterpreted_thenReturnsMsgContentWithRegisterValue()
+		{
+			Assert.AreEqual("1", AssemblerInterpreter.Interpret("inc AX\nmsg AX\nend\n"));
 		}
 	}
 }

@@ -5,25 +5,197 @@ using System.Text;
 namespace AssemblerInterpreter
 {
 	// This is the code and entrypoint for the Codewars kata (Interpret)
+	//
+	// Unfortunately, there is no modularizing of the code for Codewars - it
+	// all has to fit in one single class pasted into the solution window.
 	public class AssemblerInterpreter
 	{
 		public static string Interpret(string input)
 		{
-			// Your code here!
-			return null;
+			Processor processor = new Processor();
+			return processor.Execute(CodeParser.ParseCode(input));
 		}
+
 
 		// Processor support --------------------------
 
 		public class Processor
 		{
-			private Flags flags; 
+			private Flags flags = new Flags();
+			private Stack<int> stack = new Stack<int>();
+			private int ip = 0;
+			private string outputMessage = string.Empty;
+			private Dictionary<string, Register> registers = new Dictionary<string, Register>();
 
+			public string Execute(Executable program)
+			{
+				PrepareRegisters(program.Registers);
+				return ProcessInstructions(program) ? outputMessage : null;
+			}
+
+			private void PrepareRegisters(List<RegisterMoniker> registerMonikers)
+			{
+				foreach (var moniker in registerMonikers)
+				{
+					var register = new Register(moniker.Moniker, 0);
+					registers.Add(register.Moniker, register);
+				}
+			}
+
+			private bool ProcessInstructions(Executable program)
+			{
+				bool gotEnd = false;
+				while (true)
+				{
+					if (ip >= program.Instructions.Count)
+					{
+						// if IP beyond program steps - exit dirty
+						break;
+					}
+
+					Instruction instruction = program.Instructions[ip];
+					if (instruction.Opcode == "ret")
+					{
+						ip = stack.Pop();
+						continue;
+					}
+					else if (instruction.Opcode == "end")
+					{
+						gotEnd = true;
+						break;
+					}
+					else if (instruction is LabelUnaryInstruction)
+					{
+						if (ProcessInstruction(instruction as LabelUnaryInstruction, program.Targets))
+						{
+							continue;
+						}
+					}
+					else if (instruction is RegisterUnaryInstruction)
+					{
+						ProcessInstruction(instruction as RegisterUnaryInstruction);
+
+					}
+					else if (instruction is BinaryInstruction)
+					{
+						ProcessInstruction(instruction as BinaryInstruction);
+					}
+					else if (instruction is MsgInstruction)
+					{
+						ProcessInstruction(instruction as MsgInstruction);
+					}
+					else
+					{
+						throw new Exception("Unknown instruction type provided");
+					}
+
+					++ip;
+				}
+
+				return gotEnd;
+			}
+
+			private bool ProcessInstruction(LabelUnaryInstruction instruction, List<Target> targets)
+			{
+				if (instruction.Opcode == "jne" && !flags.NotEqual)
+				{
+					return false;
+				}
+				else if (instruction.Opcode == "je" && !flags.Equal)
+				{
+					return false;
+				}
+				else if (instruction.Opcode == "jg" && !flags.GreaterThan)
+				{
+					return false;
+				}
+				else if (instruction.Opcode == "jge" && !flags.GreaterThanOrEqual)
+				{
+					return false;
+				}
+				else if (instruction.Opcode == "jl" && !flags.LessThan)
+				{
+					return false;
+				}
+				else if (instruction.Opcode == "jle" && !flags.LessThanOrEqual)
+				{
+					return false;
+				}
+				else if (instruction.Opcode == "call")
+				{
+					stack.Push(ip + 1);
+				}
+				JumpToLabel(instruction.Label.Name, targets);
+				return true;
+			}
+
+			private void ProcessInstruction(RegisterUnaryInstruction instruction)
+			{
+				var register = GetRegisterFromMoniker(instruction.Register);
+				if (instruction.Opcode == "inc")
+				{
+					register.Inc();
+				}
+				else if (instruction.Opcode == "dec")
+				{
+					register.Dec();
+				}
+				else
+				{
+					throw new Exception("Unknown unary instruction opcode provided");
+				}
+			}
+
+			private void ProcessInstruction(BinaryInstruction instruction)
+			{
+				throw new NotImplementedException();
+			}
+
+			private void ProcessInstruction(MsgInstruction instruction)
+			{
+				var builder = new StringBuilder();
+				foreach (var param in instruction.Parameters)
+				{
+					if (param is ConstantText)
+					{
+						builder.Append(((ConstantText)param).Text);
+					}
+					else if (param is RegisterMoniker)
+					{
+						var register = GetRegisterFromMoniker((RegisterMoniker)param);
+						builder.Append(register.Value.ToString());
+					}
+					else
+					{
+						throw new Exception("Invalid parameter type found for msg");
+					}
+				}
+
+				outputMessage = builder.ToString();
+			}
+
+			private Register GetRegisterFromMoniker(RegisterMoniker moniker)
+			{
+				return registers[moniker.Moniker];
+			}
+
+			private void JumpToLabel(string label, List<Target> targets)
+			{
+				foreach (var target in targets)
+				{
+					if (target.Label == label)
+					{
+						ip = target.Offset;
+						return;
+					}
+				}
+				throw new Exception("Found jump to a non existent label {label}");
+			}
 		}
 
 		private class Flags
 		{
-			public bool Equal { get; set }
+			public bool Equal { get; set; }
 			public bool LessThan { get; set; }
 			public bool GreaterThan { get; set; }
 
@@ -58,6 +230,41 @@ namespace AssemblerInterpreter
 			}
 		}
 
+		private class Register
+		{
+			public Register(string moniker, int value)
+			{
+				Moniker = moniker;
+				Value = value;
+			}
+
+			public string Moniker { get; private set; }
+			public int Value { get; set; }
+
+			public void Inc() => Value = Value + 1;
+			public void Dec() => Value = Value - 1;
+			public void Add(int addend) => Value = Value + addend;
+			public void Add(Register register) => Add(register.Value);
+			public void Sub(int subtrahend) => Value = Value - subtrahend;
+			public void Sub(Register register) => Sub(register.Value);
+			public void Mul(int multiplier) => Value = Value * multiplier;
+			public void Mul(Register register) => Mul(register.Value);
+			public void Div(int divisor) => Value = Value / divisor;
+			public void Div(Register register) => Div(register.Value);
+			public void Mov(int value) => Value = value;
+			public void Mov(Register register) => Mov(register.Value);
+			public void Cmp(int value, Flags flags)
+			{
+				flags.Reset();
+				if (Value < value)
+					flags.LessThan = true;
+				else if (Value > value)
+					flags.GreaterThan = true;
+				else
+					flags.Equal = true;
+			}
+			public void Cmp(Register register, Flags flags) => Cmp(register.Value, flags);
+		}
 
 
 		// Parser support -----------------------------
@@ -76,7 +283,7 @@ namespace AssemblerInterpreter
 
 			private readonly List<Instruction> instructions = new List<Instruction>();
 			private readonly List<Target> targets = new List<Target>();
-			private readonly List<Register> registers = new List<Register>();
+			private readonly List<RegisterMoniker> registers = new List<RegisterMoniker>();
 
 			public Executable Parse(String code)
 			{
@@ -104,7 +311,7 @@ namespace AssemblerInterpreter
 				}
 			}
 
-			private void AddRegister(Register register)
+			private void AddRegister(RegisterMoniker register)
 			{
 				if (!registers.Contains(register))
 				{
@@ -115,6 +322,18 @@ namespace AssemblerInterpreter
 			private void AddInstruction(ImmediateInstruction instruction)
 			{
 				instructions.Add(instruction);
+			}
+
+			private void AddInstruction(MsgInstruction instruction)
+			{
+				instructions.Add(instruction);
+				foreach (IOperand operand in instruction.Parameters)
+				{
+					if (operand is RegisterMoniker)
+					{
+						AddRegister(operand as RegisterMoniker);
+					}
+				}
 			}
 
 			private void AddInstruction(UnaryInstruction instruction)
@@ -130,37 +349,46 @@ namespace AssemblerInterpreter
 			private void AddInstruction(BinaryInstruction instruction)
 			{
 				instructions.Add(instruction);
-				if (instruction.Source is Register)
+				if (instruction.Source is RegisterMoniker)
 				{
-					AddRegister(instruction.Source as Register);
+					AddRegister(instruction.Source as RegisterMoniker);
 				}
-				if (instruction.Target is Register)
+				if (instruction.Target is RegisterMoniker)
 				{
-					AddRegister(instruction.Target as Register);
+					AddRegister(instruction.Target as RegisterMoniker);
 				}
 			}
-
 
 			private readonly List<string> ImmediateOpcodes = new List<string>(new string[] { "ret", "end" });
 			private readonly List<string> RegisterUnaryOpcodes = new List<string>(new string[] { "inc", "dec" });
 			private readonly List<string> LabelUnaryOpcodes = new List<string>(new string[] { "jmp", "jne", "je", "jge", "jg", "jle", "jl", "call" });
 			private readonly List<string> RegisterBinaryOpcodes = new List<string>(new string[] { "mov", "add", "sub", "mul", "div" });
 			private readonly List<string> AnyBinaryOpcodes = new List<string>(new string[] { "cmp" });
+			private readonly List<string> MessageOpcodes = new List<string>(new string[] { "msg" });
+
 
 			private void ParseLine(string line)
 			{
-				List<string> tokens = Tokenize(line);
+				List<string> tokens = Tokenize(line.Clone() as string);
 				var opcode = tokens[0];
 				if (ImmediateOpcodes.Contains(opcode))
 				{
 					AddInstruction(new ImmediateInstruction(opcode));
 					return;
 				}
+				else if (MessageOpcodes.Contains(opcode))
+				{
+					if (tokens.Count >= 2)
+					{
+						AddInstruction(ParseMsgInstructionFrom(opcode, line));
+						return;
+					}
+				}
 				else if (tokens.Count == 2)
 				{
 					if (RegisterUnaryOpcodes.Contains(opcode))
 					{
-						AddInstruction(new RegisterUnaryInstruction(opcode, new Register(tokens[1])));
+						AddInstruction(new RegisterUnaryInstruction(opcode, new RegisterMoniker(tokens[1])));
 						return;
 					}
 					else if (LabelUnaryOpcodes.Contains(opcode))
@@ -171,8 +399,8 @@ namespace AssemblerInterpreter
 				}
 				else if (tokens.Count == 3)
 				{
-					IBinaryOperand target = CreateOperand(tokens[1]);
-					IBinaryOperand source = CreateOperand(tokens[2]);
+					IOperand target = CreateOperand(tokens[1]);
+					IOperand source = CreateOperand(tokens[2]);
 					if (RegisterBinaryOpcodes.Contains(opcode))
 					{
 						if (target is Constant)
@@ -186,6 +414,10 @@ namespace AssemblerInterpreter
 					{
 						AddInstruction(new BinaryInstruction(opcode, target, source));
 					}
+				}
+				else if (tokens.Count > 3)
+				{
+					throw new Exception("Invalid argument count");
 				}
 				throw new Exception("Invalid opcode {opcode} found");
 			}
@@ -210,6 +442,13 @@ namespace AssemblerInterpreter
 					else
 					{
 						tokens.Add(parts[1].Trim());
+					}
+				}
+				else if (parts.Length > 2)
+				{
+					for (int index = 1; index < parts.Length; index++)
+					{
+						tokens.Add(parts[index]);
 					}
 				}
 
@@ -245,17 +484,88 @@ namespace AssemblerInterpreter
 						return tokens.ToArray();
 					}
 				}
-				throw new Exception("Invalid argument count");
+				return parts;
 			}
 
-			private IBinaryOperand CreateOperand(string token)
+			private MsgInstruction ParseMsgInstructionFrom(string opcode, string rawLine)
+			{
+				rawLine = rawLine.Trim();
+				var paramLine = rawLine.Substring(opcode.Length).Trim();
+				List<string> parameters = SplitMsgParamsFrom(paramLine);
+				List<IOperand> operands = new List<IOperand>();
+				foreach (string parameter in parameters)
+				{
+					if (parameter.StartsWith('\''))
+					{
+						operands.Add(new ConstantText(parameter.Substring(1, parameter.Length - 2)));
+					}
+					else
+					{
+						IOperand operand = CreateOperand(parameter);
+						if (operand is RegisterMoniker)
+						{
+							operands.Add(operand);
+						}
+						else
+						{
+							throw new Exception("Invalid argument type - only text strings and registers are permitted msg parameter types");
+						}
+					}
+				}
+
+				return new MsgInstruction(opcode, operands[0], operands.GetRange(1, operands.Count - 1).ToArray());
+			}
+
+			private List<string> SplitMsgParamsFrom(string paramLine)
+			{
+				List<string> parameters = new List<string>();
+				int startOffset = 0;
+				int offset = 0;
+				bool inQuote = false;
+				while (true)
+				{
+					if (offset == paramLine.Length)
+					{
+						if (startOffset >= offset)
+						{
+							throw new Exception("Malformed msg parameters ending with empty parameter");
+						}
+						var text = paramLine.Substring(startOffset, offset - startOffset).Trim();
+						if (text.Length == 0)
+						{
+							throw new Exception("Malformed msg parameter - zero length");
+						}
+						parameters.Add(text);
+						break;
+					}
+					else if (paramLine[offset] == '\'')
+					{
+						inQuote = !inQuote;
+					}
+					else if (!inQuote && paramLine[offset] == ',')
+					{
+						var text = paramLine.Substring(startOffset, offset - startOffset).Trim();
+						if (text.Length == 0)
+						{
+							throw new Exception("Malformed msg parameter - zero length");
+						}
+						parameters.Add(text);
+						startOffset = offset + 1;
+					}
+					++offset;
+				}
+
+				return parameters;
+			}
+
+			private IOperand CreateOperand(string token)
 			{
 				int value;
 				if (int.TryParse(token, out value))
 				{
 					return new Constant(value);
 				}
-				return new Register(token);
+				return new RegisterMoniker(token);
 			}
 
 			private string[] SplitByDelimiter(string code)
@@ -266,7 +576,7 @@ namespace AssemblerInterpreter
 
 		public class Executable
 		{
-			public Executable(List<Instruction> instructions, List<Target> targets, List<Register> registers)
+			public Executable(List<Instruction> instructions, List<Target> targets, List<RegisterMoniker> registers)
 			{
 				Instructions = instructions;
 				Targets = targets;
@@ -276,7 +586,7 @@ namespace AssemblerInterpreter
 			public string Name { get; private set; }
 			public List<Instruction> Instructions { get; private set; }
 			public List<Target> Targets { get; private set; }
-			public List<Register> Registers { get; private set; }
+			public List<RegisterMoniker> Registers { get; private set; }
 		}
 
 		public class Instruction
@@ -289,13 +599,13 @@ namespace AssemblerInterpreter
 			public ImmediateInstruction(string opcode) => Opcode = opcode;
 		}
 
-		public interface IBinaryOperand { }
+		public interface IOperand { }
 
-		public class Register : IBinaryOperand
+		public class RegisterMoniker : IOperand
 		{
-			public Register(string name) => Name = name;
+			public RegisterMoniker(string moniker) => Moniker = moniker;
 
-			public string Name { get; private set; }
+			public string Moniker { get; private set; }
 		}
 
 		public class Label
@@ -305,11 +615,18 @@ namespace AssemblerInterpreter
 			public string Name { get; private set; }
 		}
 
-		public class Constant : IBinaryOperand
+		public class Constant : IOperand
 		{
 			public Constant(int value) => Value = value;
 
 			public int Value { get; private set; }
+		}
+
+		public class ConstantText : IOperand
+		{
+			public ConstantText(string text) => Text = text;
+
+			public string Text { get; private set; }
 		}
 
 		public class UnaryInstruction : Instruction
@@ -319,10 +636,10 @@ namespace AssemblerInterpreter
 
 		public class RegisterUnaryInstruction : UnaryInstruction
 		{
-			public RegisterUnaryInstruction(string opcode, Register register) 
+			public RegisterUnaryInstruction(string opcode, RegisterMoniker register) 
 				: base(opcode) => Register = register;
 
-			public Register Register { get; private set; }
+			public RegisterMoniker Register { get; private set; }
 		}
 
 		public class LabelUnaryInstruction : UnaryInstruction
@@ -335,15 +652,32 @@ namespace AssemblerInterpreter
 
 		public class BinaryInstruction : Instruction
 		{
-			public BinaryInstruction(string opcode, IBinaryOperand target, IBinaryOperand source) 
+			public BinaryInstruction(string opcode, IOperand target, IOperand source) 
 			{
 				Opcode = opcode;
 				Target = target;
 				Source = source;
 			}
 
-			public IBinaryOperand Target { get; private set; }
-			public IBinaryOperand Source { get; private set; }
+			public IOperand Target { get; private set; }
+			public IOperand Source { get; private set; }
+		}
+
+		public class MsgInstruction : Instruction
+		{
+			public MsgInstruction(string opcode, IOperand param0, params IOperand[] extraParams)
+			{
+				Opcode = opcode;
+				List<IOperand> parameters = new List<IOperand>();
+				parameters.Add(param0);
+				foreach (IOperand operand in extraParams)
+				{
+					parameters.Add(operand);
+				}
+				Parameters = parameters.ToArray();
+			}
+
+			public IOperand[] Parameters { get; private set; }
 		}
 
 		public class Target

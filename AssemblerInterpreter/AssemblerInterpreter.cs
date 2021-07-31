@@ -60,18 +60,65 @@ namespace AssemblerInterpreter
 				}
 			}
 
-			private List<string> ImmediateOpcodes = new List<string>(new string[] { "ret", "end" });
+			private readonly List<string> ImmediateOpcodes = new List<string>(new string[] { "ret", "end" });
+			private readonly List<string> RegisterUnaryOpcodes = new List<string>(new string[] { "inc", "dec" });
+			private readonly List<string> LabelUnaryOpcodes = new List<string>(new string[] { "jmp", "jne", "je", "jge", "jg", "jle", "jl", "call" });
 
 
 			private void ParseLine(string line)
 			{
-				var opcode = line.ToLower();
+				List<string> tokens = Tokenize(line);
+				var opcode = tokens[0];
 				if (ImmediateOpcodes.Contains(opcode))
 				{
 					instructions.Add(new ImmediateInstruction(opcode));
 					return;
 				}
+				else if (tokens.Count == 2)
+				{
+					if (RegisterUnaryOpcodes.Contains(opcode))
+					{
+						instructions.Add(new RegisterUnaryInstruction(opcode, new Register(tokens[1])));
+						return;
+					}
+					else if (LabelUnaryOpcodes.Contains(opcode))
+					{
+						instructions.Add(new LabelUnaryInstruction(opcode, new Label(tokens[1])));
+						return;
+					}
+				}
 				throw new Exception("Invalid opcode {opcode} found");
+			}
+
+			private List<string> Tokenize(string line)
+			{
+				line = line.ToLower();
+
+				List<string> tokens = new List<string>();
+				string[] parts = line.Split(" \t".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+				tokens.Add(parts[0].Trim());
+				if (parts.Length == 2)
+				{
+					if (parts[1].Contains(','))
+					{
+						string[] subParts = parts[1].Split(",".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+						if (subParts.Length != 2)
+						{
+							throw new Exception("Invalid argument count");
+						}
+						tokens.Add(subParts[0].Trim());
+						tokens.Add(subParts[1].Trim());
+					}
+					else
+					{
+						tokens.Add(parts[1].Trim());
+					}
+				}
+				else if (parts.Length != 1)
+				{
+					throw new Exception("Invalid argument count");
+				}
+				return tokens;
 			}
 
 			private string[] SplitByDelimiter(string code)
@@ -101,12 +148,41 @@ namespace AssemblerInterpreter
 		public class ImmediateInstruction : Instruction
 		{
 			public ImmediateInstruction(string opcode) => Opcode = opcode;
-
 		}
 
-	public class UnaryInstruction : Instruction
+		public class Register
 		{
+			public Register(string name) => Name = name;
 
+			public string Name { get; private set; }
+		}
+
+		public class Label
+		{
+			public Label(string name) => Name = name;
+
+			public string Name { get; private set; }
+		}
+
+		public class UnaryInstruction : Instruction
+		{
+			protected UnaryInstruction(string opcode) => Opcode = opcode;
+		}
+
+		public class RegisterUnaryInstruction : UnaryInstruction
+		{
+			public RegisterUnaryInstruction(string opcode, Register register) 
+				: base(opcode) => Register = register;
+
+			public Register Register { get; private set; }
+		}
+
+		public class LabelUnaryInstruction : UnaryInstruction
+		{
+			public LabelUnaryInstruction(string opcode, Label label)
+				: base(opcode) => Label = label;
+
+			public Label Label { get; private set; }
 		}
 
 		public class BinaryInstruction : Instruction

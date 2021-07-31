@@ -61,5 +61,21 @@ namespace AssemblerInterpreter
 		{
 			Assert.Throws<Exception>(() => CodeParser.ParseCode("BLAH"));
 		}
+
+		[Test]
+		public void givenCodeWithOnlyJmp_whenParsed_thenReturnsUnaryInstructionForJmp()
+		{
+			Executable executable = CodeParser.ParseCode("JMP label");
+			Assert.IsTrue(executable.Instructions.Count == 1);
+			Assert.AreEqual("jmp", executable.Instructions[0].Opcode);
+		}
+
+		[Test]
+		public void givenCodeWithOnlyInc_whenParsed_thenReturnsUnaryInstructionForInc()
+		{
+			Executable executable = CodeParser.ParseCode("INC AX");
+			Assert.IsTrue(executable.Instructions.Count == 1);
+			Assert.AreEqual("inc", executable.Instructions[0].Opcode);
+		}
 	}
 }

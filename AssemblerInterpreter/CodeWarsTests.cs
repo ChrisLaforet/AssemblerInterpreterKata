@@ -11,7 +11,6 @@ namespace AssemblerInterpreter
     {
 
         [Test]
-		[Ignore("Until code is developed")]
         public void TestSimple()
         {
             for (int i = 0; i < expected.Length; i++)

@@ -154,11 +154,11 @@ namespace AssemblerInterpreter
 					flags.Reset();
 					int sourceValue = GetValueFromOperand(instruction.Source);
 					int targetValue = GetValueFromOperand(instruction.Target);
-					if (sourceValue > targetValue)
+					if (sourceValue < targetValue)
 					{
 						flags.GreaterThan = true;
 					}
-					else if (sourceValue < targetValue)
+					else if (sourceValue > targetValue)
 					{
 						flags.LessThan = true;
 					}
@@ -519,6 +519,20 @@ namespace AssemblerInterpreter
 			{
 				line = line.ToLower();
 				string[] parts = line.Split(" \t".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+				if (parts[0].Contains(';'))
+				{
+					var offset = parts[0].IndexOf(';');
+					parts[0] = parts[0].Substring(0, offset).Trim();
+				}
+				if (parts[0] != "msg")
+				{
+					if (line.Contains(';'))		// tear out embedded comments
+					{
+						var offset = line.IndexOf(';');
+						parts = line.Substring(0, offset).Split(" \t".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+					}
+				}
+
 				if (parts.Length <= 2)
 				{
 					return parts;
@@ -601,6 +615,16 @@ namespace AssemblerInterpreter
 					else if (paramLine[offset] == '\'')
 					{
 						inQuote = !inQuote;
+					}
+					else if (!inQuote && paramLine[offset] == ';')		// terminating comment
+					{
+						var text = paramLine.Substring(startOffset, offset - startOffset).Trim();
+						if (text.Length == 0)
+						{
+							throw new Exception("Malformed msg parameter - zero length");
+						}
+						parameters.Add(text);
+						break;
 					}
 					else if (!inQuote && paramLine[offset] == ',')
 					{

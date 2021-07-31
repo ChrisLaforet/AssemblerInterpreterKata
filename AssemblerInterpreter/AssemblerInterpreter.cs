@@ -15,6 +15,11 @@ namespace AssemblerInterpreter
 
 		// Processor support --------------------------
 
+		public class Processor
+		{
+
+		}
+
 
 		// Parser support -----------------------------
 
@@ -32,11 +37,12 @@ namespace AssemblerInterpreter
 
 			private readonly List<Instruction> instructions = new List<Instruction>();
 			private readonly List<Target> targets = new List<Target>();
+			private readonly List<Register> registers = new List<Register>();
 
 			public Executable Parse(String code)
 			{
 				Tokenize(SplitByDelimiter(code));
-				return new Executable(instructions, targets);
+				return new Executable(instructions, targets, registers);
 			}
 
 			private void Tokenize(string[] lines)
@@ -56,9 +62,45 @@ namespace AssemblerInterpreter
 					{
 						ParseLine(toParse);
 					}
-
 				}
 			}
+
+			private void AddRegister(Register register)
+			{
+				if (!registers.Contains(register))
+				{
+					registers.Add(register);
+				}
+			}
+
+			private void AddInstruction(ImmediateInstruction instruction)
+			{
+				instructions.Add(instruction);
+			}
+
+			private void AddInstruction(UnaryInstruction instruction)
+			{
+				instructions.Add(instruction);
+				if (instruction is RegisterUnaryInstruction)
+				{
+					var unary = instruction as RegisterUnaryInstruction;
+					AddRegister(unary.Register);
+				}
+			}
+
+			private void AddInstruction(BinaryInstruction instruction)
+			{
+				instructions.Add(instruction);
+				if (instruction.Source is Register)
+				{
+					AddRegister(instruction.Source as Register);
+				}
+				if (instruction.Target is Register)
+				{
+					AddRegister(instruction.Target as Register);
+				}
+			}
+
 
 			private readonly List<string> ImmediateOpcodes = new List<string>(new string[] { "ret", "end" });
 			private readonly List<string> RegisterUnaryOpcodes = new List<string>(new string[] { "inc", "dec" });
@@ -72,19 +114,19 @@ namespace AssemblerInterpreter
 				var opcode = tokens[0];
 				if (ImmediateOpcodes.Contains(opcode))
 				{
-					instructions.Add(new ImmediateInstruction(opcode));
+					AddInstruction(new ImmediateInstruction(opcode));
 					return;
 				}
 				else if (tokens.Count == 2)
 				{
 					if (RegisterUnaryOpcodes.Contains(opcode))
 					{
-						instructions.Add(new RegisterUnaryInstruction(opcode, new Register(tokens[1])));
+						AddInstruction(new RegisterUnaryInstruction(opcode, new Register(tokens[1])));
 						return;
 					}
 					else if (LabelUnaryOpcodes.Contains(opcode))
 					{
-						instructions.Add(new LabelUnaryInstruction(opcode, new Label(tokens[1])));
+						AddInstruction(new LabelUnaryInstruction(opcode, new Label(tokens[1])));
 						return;
 					}
 				}
@@ -98,12 +140,12 @@ namespace AssemblerInterpreter
 						{
 							throw new Exception("Invalid target type - cannot be constant");
 						}
-						instructions.Add(new BinaryInstruction(opcode, target, source));
+						AddInstruction(new BinaryInstruction(opcode, target, source));
 						return;
 					}
 					else if (AnyBinaryOpcodes.Contains(opcode))
 					{
-						instructions.Add(new BinaryInstruction(opcode, target, source));
+						AddInstruction(new BinaryInstruction(opcode, target, source));
 					}
 				}
 				throw new Exception("Invalid opcode {opcode} found");
@@ -111,10 +153,8 @@ namespace AssemblerInterpreter
 
 			private List<string> Tokenize(string line)
 			{
-				line = line.ToLower();
-
+				string[] parts = TokenizeAndStandardize(line);
 				List<string> tokens = new List<string>();
-				string[] parts = line.Split(" \t".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
 				tokens.Add(parts[0].Trim());
 				if (parts.Length == 2)
 				{
@@ -133,11 +173,40 @@ namespace AssemblerInterpreter
 						tokens.Add(parts[1].Trim());
 					}
 				}
-				else if (parts.Length != 1)
-				{
-					throw new Exception("Invalid argument count");
-				}
+
 				return tokens;
+			}
+
+			private string[] TokenizeAndStandardize(string line)
+			{
+				line = line.ToLower();
+				string[] parts = line.Split(" \t".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+				if (parts.Length <= 2)
+				{
+					return parts;
+				}
+				else if (parts.Length == 3)
+				{
+					if ((parts[1].EndsWith(',') && !parts[2].Contains(',')) ||
+						parts[2].StartsWith(','))
+					{
+						List<string> tokens = new List<string>();
+						tokens.Add(parts[0]);
+						tokens.Add(parts[1] + parts[2]);
+						return tokens.ToArray();
+					}
+				}
+				else if (parts.Length == 4 && parts[2] == ",")
+				{
+					if (!parts[1].Contains(',') && !parts[3].Contains(','))
+					{
+						List<string> tokens = new List<string>();
+						tokens.Add(parts[0]);
+						tokens.Add(parts[1] + parts[2] + parts[3]);
+						return tokens.ToArray();
+					}
+				}
+				throw new Exception("Invalid argument count");
 			}
 
 			private IBinaryOperand CreateOperand(string token)
@@ -158,15 +227,17 @@ namespace AssemblerInterpreter
 
 		public class Executable
 		{
-			public Executable(List<Instruction> instructions, List<Target> targets)
+			public Executable(List<Instruction> instructions, List<Target> targets, List<Register> registers)
 			{
 				Instructions = instructions;
 				Targets = targets;
+				Registers = registers;
 			}
 
 			public string Name { get; private set; }
 			public List<Instruction> Instructions { get; private set; }
 			public List<Target> Targets { get; private set; }
+			public List<Register> Registers { get; private set; }
 		}
 
 		public class Instruction
@@ -235,7 +306,6 @@ namespace AssemblerInterpreter
 			public IBinaryOperand Target { get; private set; }
 			public IBinaryOperand Source { get; private set; }
 		}
-
 
 		public class Target
 		{

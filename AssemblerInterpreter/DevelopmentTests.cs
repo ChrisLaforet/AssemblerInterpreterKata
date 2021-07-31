@@ -84,6 +84,16 @@ namespace AssemblerInterpreter
 			Executable executable = CodeParser.ParseCode("MUL AX,BX");
 			Assert.IsTrue(executable.Instructions.Count == 1);
 			Assert.AreEqual("mul", executable.Instructions[0].Opcode);
+			Assert.AreEqual(2, executable.Registers.Count);
+		}
+
+		[Test]
+		public void givenCodeWithOnlyAddAnd1Register_whenParsed_thenReturnsBinaryInstructionForAdd()
+		{
+			Executable executable = CodeParser.ParseCode("ADD AX, 123");
+			Assert.IsTrue(executable.Instructions.Count == 1);
+			Assert.AreEqual("add", executable.Instructions[0].Opcode);
+			Assert.AreEqual(1, executable.Registers.Count);
 		}
 	}
 }

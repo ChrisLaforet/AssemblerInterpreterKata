@@ -17,8 +17,47 @@ namespace AssemblerInterpreter
 
 		public class Processor
 		{
+			private Flags flags; 
 
 		}
+
+		private class Flags
+		{
+			public bool Equal { get; set }
+			public bool LessThan { get; set; }
+			public bool GreaterThan { get; set; }
+
+			public void Reset()
+			{
+				Equal = false;
+				LessThan = false;
+				GreaterThan = false;
+			}
+
+			public bool GreaterThanOrEqual { 
+				get
+				{
+					return Equal || GreaterThan;
+				}
+			}
+
+			public bool LessThanOrEqual
+			{
+				get
+				{
+					return Equal || LessThan;
+				}
+			}
+
+			public bool NotEqual
+			{
+				get
+				{
+					return !Equal;
+				}
+			}
+		}
+
 
 
 		// Parser support -----------------------------

@@ -52,9 +52,26 @@ namespace AssemblerInterpreter
 					{
 						var label = toParse.Substring(0, toParse.Length - 1);
 						targets.Add(new Target(label, instructions.Count));
+					} else
+					{
+						ParseLine(toParse);
 					}
 
 				}
+			}
+
+			private List<string> ImmediateOpcodes = new List<string>(new string[] { "ret", "end" });
+
+
+			private void ParseLine(string line)
+			{
+				var opcode = line.ToLower();
+				if (ImmediateOpcodes.Contains(opcode))
+				{
+					instructions.Add(new ImmediateInstruction(opcode));
+					return;
+				}
+				throw new Exception("Invalid opcode {opcode} found");
 			}
 
 			private string[] SplitByDelimiter(string code)
@@ -76,7 +93,26 @@ namespace AssemblerInterpreter
 			public List<Target> Targets { get; private set; }
 		}
 
-		public interface Instruction { }
+		public class Instruction
+		{
+			public string Opcode { get; protected set; }
+		}
+
+		public class ImmediateInstruction : Instruction
+		{
+			public ImmediateInstruction(string opcode) => Opcode = opcode;
+
+		}
+
+	public class UnaryInstruction : Instruction
+		{
+
+		}
+
+		public class BinaryInstruction : Instruction
+		{
+
+		}
 
 
 		public class Target

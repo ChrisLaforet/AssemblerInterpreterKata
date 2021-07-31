@@ -1,4 +1,5 @@
 using NUnit.Framework;
+using System;
 using static AssemblerInterpreter.AssemblerInterpreter;
 
 namespace AssemblerInterpreter
@@ -37,6 +38,28 @@ namespace AssemblerInterpreter
 			Executable executable = CodeParser.ParseCode("label:");
 			Assert.IsTrue(executable.Targets.Count == 1);
 			Assert.AreEqual("label", executable.Targets[0].Label);
+		}
+
+		[Test]
+		public void givenCodeWithOnlyRtn_whenParsed_thenReturnsImmediateInstructionForRtn()
+		{
+			Executable executable = CodeParser.ParseCode("RTN");
+			Assert.IsTrue(executable.Instructions.Count == 1);
+			Assert.AreEqual("rtn", executable.Instructions[0].Opcode);
+		}
+
+		[Test]
+		public void givenCodeWithOnlyEnd_whenParsed_thenReturnsImmediateInstructionForEnd()
+		{
+			Executable executable = CodeParser.ParseCode("END");
+			Assert.IsTrue(executable.Instructions.Count == 1);
+			Assert.AreEqual("end", executable.Instructions[0].Opcode);
+		}
+
+		[Test]
+		public void givenCodeWithBadOpcode_whenParsed_thenThrowsException()
+		{
+			Assert.Throws<Exception>(() => CodeParser.ParseCode("BLAH"));
 		}
 	}
 }

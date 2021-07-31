@@ -151,5 +151,30 @@ namespace AssemblerInterpreter
 		{
 			Assert.AreEqual("1", AssemblerInterpreter.Interpret("inc AX\nmsg AX\nend\n"));
 		}
+
+		[Test]
+		public void givenCodeWithAddOnRegister_whenInterpreted_thenReturnsMsgContent()
+		{
+			Assert.AreEqual("20", AssemblerInterpreter.Interpret("mov AX,15\nadd AX, 5\nmsg AX\nend\n"));
+
+		}
+
+		[Test]
+		public void givenCodeWithDivOnRegister_whenInterpreted_thenReturnsMsgContent()
+		{
+			Assert.AreEqual("3", AssemblerInterpreter.Interpret("mov AX,15\n div\tAX, 5 \nmsg AX\nend\n"));
+		}
+
+		[Test]
+		public void givenCodeWithCmpEqualsOnRegister_whenInterpreted_thenReturnsEqualMsgContent()
+		{
+			Assert.AreEqual("Equal", AssemblerInterpreter.Interpret("mov AX,15\ncmp ax, 15\nje equals\nmsg 'Not equal'\njmp exit\nequals:\nmsg 'Equal'\njmp exit\nexit:\nend\n"));
+		}
+
+		[Test]
+		public void givenCodeWithCmpNotEqualsOnRegister_whenInterpreted_thenReturnsNotEqualMsgContent()
+		{
+			Assert.AreEqual("Not equal", AssemblerInterpreter.Interpret("mov AX,15\ncmp ax, 91\nje equals\nmsg 'Not equal'\njmp exit\nequals:\nmsg 'Equal'\njmp exit\nexit:\nend\n"));
+		}
 	}
 }

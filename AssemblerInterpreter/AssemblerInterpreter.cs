@@ -132,23 +132,68 @@ namespace AssemblerInterpreter
 			private void ProcessInstruction(RegisterUnaryInstruction instruction)
 			{
 				var register = GetRegisterFromMoniker(instruction.Register);
-				if (instruction.Opcode == "inc")
+				switch (instruction.Opcode)
 				{
-					register.Inc();
-				}
-				else if (instruction.Opcode == "dec")
-				{
-					register.Dec();
-				}
-				else
-				{
-					throw new Exception("Unknown unary instruction opcode provided");
+					case "inc":
+						register.Inc();
+						break;
+
+					case "dec":
+						register.Dec();
+						break;
+
+					default:
+						throw new Exception("Unknown unary instruction opcode provided");
 				}
 			}
 
 			private void ProcessInstruction(BinaryInstruction instruction)
 			{
-				throw new NotImplementedException();
+				if (instruction.Opcode == "cmp")
+				{
+					flags.Reset();
+					int sourceValue = GetValueFromOperand(instruction.Source);
+					int targetValue = GetValueFromOperand(instruction.Target);
+					if (sourceValue > targetValue)
+					{
+						flags.GreaterThan = true;
+					}
+					else if (sourceValue < targetValue)
+					{
+						flags.LessThan = true;
+					}
+					else
+					{
+						flags.Equal = true;
+					}
+					return;
+				}
+
+				var targetRegister = GetRegisterFromMoniker((RegisterMoniker)instruction.Target);
+				if (instruction.Opcode == "mov")
+				{
+					targetRegister.Value = GetValueFromOperand(instruction.Source);
+				}
+				else if (instruction.Opcode == "add")
+				{
+					targetRegister.Add(GetValueFromOperand(instruction.Source));
+				}
+				else if (instruction.Opcode == "sub")
+				{
+					targetRegister.Sub(GetValueFromOperand(instruction.Source));
+				}
+				else if (instruction.Opcode == "mul")
+				{
+					targetRegister.Mul(GetValueFromOperand(instruction.Source));
+				}
+				else if (instruction.Opcode == "div")
+				{
+					targetRegister.Div(GetValueFromOperand(instruction.Source));
+				}
+				else
+				{
+					throw new Exception("Unknown binary instruction opcode provided");
+				}
 			}
 
 			private void ProcessInstruction(MsgInstruction instruction)
@@ -179,6 +224,20 @@ namespace AssemblerInterpreter
 				return registers[moniker.Moniker];
 			}
 
+			private int GetValueFromOperand(IOperand operand)
+			{
+				if (operand is RegisterMoniker)
+				{
+					var register = GetRegisterFromMoniker((RegisterMoniker)operand);
+					return register.Value;
+				}
+				else if (operand is Constant)
+				{
+					return ((Constant)operand).Value;
+				}
+				throw new Exception("Invalid operand for value extraction");
+			}
+
 			private void JumpToLabel(string label, List<Target> targets)
 			{
 				foreach (var target in targets)
@@ -189,7 +248,7 @@ namespace AssemblerInterpreter
 						return;
 					}
 				}
-				throw new Exception("Found jump to a non existent label {label}");
+				throw new Exception("Found jump to a non existent label " + label);
 			}
 		}
 
@@ -313,7 +372,7 @@ namespace AssemblerInterpreter
 
 			private void AddRegister(RegisterMoniker register)
 			{
-				if (!registers.Contains(register))
+				if (!registers.Exists(current => current.Moniker == register.Moniker))
 				{
 					registers.Add(register);
 				}
@@ -413,13 +472,14 @@ namespace AssemblerInterpreter
 					else if (AnyBinaryOpcodes.Contains(opcode))
 					{
 						AddInstruction(new BinaryInstruction(opcode, target, source));
+						return;
 					}
 				}
 				else if (tokens.Count > 3)
 				{
 					throw new Exception("Invalid argument count");
 				}
-				throw new Exception("Invalid opcode {opcode} found");
+				throw new Exception("Invalid opcode " + opcode + " found");
 			}
 
 			private List<string> Tokenize(string line)
@@ -603,7 +663,7 @@ namespace AssemblerInterpreter
 
 		public class RegisterMoniker : IOperand
 		{
-			public RegisterMoniker(string moniker) => Moniker = moniker;
+			public RegisterMoniker(string moniker) => Moniker = moniker.ToLower();
 
 			public string Moniker { get; private set; }
 		}
